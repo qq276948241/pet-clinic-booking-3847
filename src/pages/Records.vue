@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { Calendar, Clock, Phone, X, FileText, AlertCircle } from 'lucide-vue-next'
+import { Calendar, Clock, Phone, X, FileText, AlertCircle, CheckCircle } from 'lucide-vue-next'
 import StatusTag from '@/components/StatusTag.vue'
-import { getAppointments, updateAppointmentStatus, saveAppointments } from '@/utils/storage'
+import { getAppointments, cancelAppointment as cancelAppointmentInStorage, saveAppointments } from '@/utils/storage'
 import { mockAppointments, formatDateDisplay } from '@/data/mock'
 import { PetTypeLabels, PetTypeEmojis } from '@/types'
 import type { Appointment } from '@/types'
@@ -23,7 +23,10 @@ const pendingCount = computed(() =>
 )
 
 const showCancelConfirm = ref(false)
-const cancelTargetId = ref<string | null>(null)
+const cancelTarget = ref<Appointment | null>(null)
+
+const showToast = ref(false)
+const toastMessage = ref('')
 
 onMounted(() => {
   loadAppointments()
@@ -39,18 +42,25 @@ function loadAppointments() {
   }
 }
 
-function confirmCancel(id: string) {
-  cancelTargetId.value = id
+function confirmCancel(apt: Appointment) {
+  cancelTarget.value = apt
   showCancelConfirm.value = true
 }
 
 function handleCancel() {
-  if (cancelTargetId.value) {
-    updateAppointmentStatus(cancelTargetId.value, 'cancelled')
+  if (cancelTarget.value) {
+    const result = cancelAppointmentInStorage(cancelTarget.value.id)
+    if (result) {
+      toastMessage.value = `已取消预约，${result.doctorName}的号源已退还`
+      showToast.value = true
+      setTimeout(() => {
+        showToast.value = false
+      }, 2500)
+    }
     loadAppointments()
   }
   showCancelConfirm.value = false
-  cancelTargetId.value = null
+  cancelTarget.value = null
 }
 
 function maskPhone(phone: string): string {
@@ -63,33 +73,69 @@ function maskPhone(phone: string): string {
 
 <template>
   <div class="flex-1 pb-24">
-    <div v-if="showCancelConfirm" class="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
-      <div class="bg-white rounded-2xl p-6 mx-4 max-w-sm w-full shadow-2xl">
-        <div class="flex items-center gap-3 mb-4">
-          <div class="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center flex-shrink-0">
-            <AlertCircle class="w-6 h-6 text-amber-500" />
+    <Transition name="toast">
+      <div
+        v-if="showToast"
+        class="fixed top-20 left-1/2 -translate-x-1/2 z-50 bg-white rounded-xl shadow-2xl px-5 py-3 flex items-center gap-2 border border-primary-100"
+      >
+        <CheckCircle class="w-5 h-5 text-primary-500 flex-shrink-0" />
+        <span class="text-sm text-gray-700 font-medium">{{ toastMessage }}</span>
+      </div>
+    </Transition>
+
+    <Transition name="fade">
+      <div v-if="showCancelConfirm" class="fixed inset-0 z-50 flex items-center justify-center bg-black/30 px-4">
+        <div class="bg-white rounded-2xl p-6 max-w-sm w-full shadow-2xl">
+          <div class="flex items-center gap-3 mb-4">
+            <div class="w-12 h-12 bg-amber-100 rounded-full flex items-center justify-center flex-shrink-0">
+              <AlertCircle class="w-6 h-6 text-amber-500" />
+            </div>
+            <div>
+              <h3 class="text-lg font-bold text-gray-800">确认取消预约</h3>
+            </div>
           </div>
-          <div>
-            <h3 class="text-lg font-bold text-gray-800">确认取消</h3>
-            <p class="text-sm text-gray-500">取消后将无法恢复，确定要取消这个预约吗？</p>
+
+          <div v-if="cancelTarget" class="bg-gray-50 rounded-xl p-4 mb-2">
+            <div class="space-y-2 text-sm">
+              <div class="flex justify-between">
+                <span class="text-gray-500">医生</span>
+                <span class="font-medium text-gray-800">{{ cancelTarget.doctorName }}</span>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-gray-500">时间</span>
+                <span class="font-medium text-gray-800">
+                  {{ formatDateDisplay(cancelTarget.date) }} {{ cancelTarget.time }}
+                </span>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-gray-500">宠物</span>
+                <span class="font-medium text-gray-800">
+                  {{ PetTypeEmojis[cancelTarget.petType] }} {{ cancelTarget.petName }}
+                </span>
+              </div>
+            </div>
           </div>
-        </div>
-        <div class="flex gap-3 mt-6">
-          <button
-            class="flex-1 py-3 rounded-xl font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 transition-colors"
-            @click="showCancelConfirm = false; cancelTargetId = null"
-          >
-            再想想
-          </button>
-          <button
-            class="flex-1 py-3 rounded-xl font-medium text-white bg-red-500 hover:bg-red-600 transition-colors"
-            @click="handleCancel"
-          >
-            确认取消
-          </button>
+          <p class="text-sm text-gray-500 mb-1">
+            取消后号源将自动退还，确定要取消这个预约吗？
+          </p>
+
+          <div class="flex gap-3 mt-5">
+            <button
+              class="flex-1 py-3 rounded-xl font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 transition-colors"
+              @click="showCancelConfirm = false; cancelTarget = null"
+            >
+              再想想
+            </button>
+            <button
+              class="flex-1 py-3 rounded-xl font-medium text-white bg-red-500 hover:bg-red-600 active:scale-98 transition-all"
+              @click="handleCancel"
+            >
+              确认取消
+            </button>
+          </div>
         </div>
       </div>
-    </div>
+    </Transition>
 
     <div class="max-w-md mx-auto px-4 py-6">
       <h2 class="text-xl font-bold text-gray-800 mb-4">我的预约</h2>
@@ -123,22 +169,30 @@ function maskPhone(phone: string): string {
         <div
           v-for="apt in filteredAppointments"
           :key="apt.id"
-          class="bg-white rounded-2xl p-4 shadow-card border border-gray-50"
+          class="bg-white rounded-2xl p-4 shadow-card border border-gray-50 relative"
         >
           <div class="flex items-start justify-between mb-3">
-            <div>
+            <div class="flex-1 min-w-0 pr-2">
               <div class="flex items-center gap-2 mb-1">
                 <span class="font-bold text-gray-800">{{ apt.doctorName }}</span>
                 <StatusTag :status="apt.status" />
               </div>
               <div class="text-xs text-gray-400">{{ apt.id }}</div>
             </div>
-            <div class="text-right">
-              <span class="text-2xl">{{ PetTypeEmojis[apt.petType] }}</span>
+            <div class="flex items-center gap-2">
+              <button
+                v-if="apt.status === 'pending'"
+                class="w-8 h-8 rounded-full flex items-center justify-center text-red-500 bg-red-50 hover:bg-red-100 active:scale-95 transition-all flex-shrink-0"
+                title="取消预约"
+                @click="confirmCancel(apt)"
+              >
+                <X class="w-4 h-4" />
+              </button>
+              <span class="text-2xl flex-shrink-0">{{ PetTypeEmojis[apt.petType] }}</span>
             </div>
           </div>
 
-          <div class="space-y-2 text-sm text-gray-600 mb-4">
+          <div class="space-y-2 text-sm text-gray-600">
             <div class="flex items-center gap-2">
               <Calendar class="w-4 h-4 text-primary-500 flex-shrink-0" />
               <span>{{ formatDateDisplay(apt.date) }}</span>
@@ -161,16 +215,6 @@ function maskPhone(phone: string): string {
               <span class="text-gray-500">{{ apt.description }}</span>
             </div>
           </div>
-
-          <div v-if="apt.status === 'pending'" class="flex gap-2">
-            <button
-              class="flex-1 py-2.5 rounded-xl text-sm font-medium text-red-500 border border-red-200 hover:bg-red-50 transition-colors flex items-center justify-center gap-1"
-              @click="confirmCancel(apt.id)"
-            >
-              <X class="w-4 h-4" />
-              取消预约
-            </button>
-          </div>
         </div>
       </div>
 
@@ -184,3 +228,27 @@ function maskPhone(phone: string): string {
     </div>
   </div>
 </template>
+
+<style scoped>
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+
+.toast-enter-active,
+.toast-leave-active {
+  transition: all 0.3s ease;
+}
+.toast-enter-from {
+  opacity: 0;
+  transform: translate(-50%, -20px);
+}
+.toast-leave-to {
+  opacity: 0;
+  transform: translate(-50%, -10px);
+}
+</style>
