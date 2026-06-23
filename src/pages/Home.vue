@@ -1,31 +1,19 @@
 <script setup lang="ts">
-import { ref, computed, onActivated } from 'vue'
+import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { Users, Clock } from 'lucide-vue-next'
 import DoctorCard from '@/components/DoctorCard.vue'
+import { useAppointment } from '@/composables/useAppointment'
 import { getDoctorsByDate, getTodayDateString, formatDateDisplay } from '@/data/mock'
-import { getDoctorBookedDelta } from '@/utils/storage'
 import type { Doctor } from '@/types'
 
 const router = useRouter()
+const { getTotalRemainingSlots } = useAppointment()
 
 const today = getTodayDateString()
 const doctors = computed(() => getDoctorsByDate(today))
 
-const refreshKey = ref(0)
-
-onActivated(() => {
-  refreshKey.value++
-})
-
-const totalRemaining = computed(() => {
-  void refreshKey.value
-  return doctors.value.reduce((sum, doc) => {
-    const delta = getDoctorBookedDelta(doc.id)
-    const actualBooked = doc.bookedSlots + delta
-    return sum + Math.max(0, doc.totalSlots - actualBooked)
-  }, 0)
-})
+const totalRemaining = computed(() => getTotalRemainingSlots(doctors.value))
 
 function handleBook(doctor: Doctor) {
   router.push({

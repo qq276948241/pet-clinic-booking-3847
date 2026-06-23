@@ -1,9 +1,8 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onActivated } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed } from 'vue'
 import { Clock, User } from 'lucide-vue-next'
 import type { Doctor } from '@/types'
-import { getDoctorBookedDelta } from '@/utils/storage'
+import { useAppointment } from '@/composables/useAppointment'
 
 const props = defineProps<{
   doctor: Doctor
@@ -14,20 +13,9 @@ const emit = defineEmits<{
   book: [doctor: Doctor]
 }>()
 
-const router = useRouter()
+const { getDoctorRemainingSlots } = useAppointment()
 
-const bookedDelta = ref(0)
-
-function refreshDelta() {
-  bookedDelta.value = getDoctorBookedDelta(props.doctor.id)
-}
-
-onMounted(refreshDelta)
-onActivated(refreshDelta)
-
-const actualBooked = computed(() => props.doctor.bookedSlots + bookedDelta.value)
-
-const remainingSlots = computed(() => Math.max(0, props.doctor.totalSlots - actualBooked.value))
+const remainingSlots = computed(() => getDoctorRemainingSlots(props.doctor.id))
 
 const slotStatus = computed(() => {
   if (remainingSlots.value === 0) return { color: 'text-red-500', bg: 'bg-red-50', label: '已满' }
@@ -38,8 +26,6 @@ const slotStatus = computed(() => {
 function handleBook() {
   emit('book', props.doctor)
 }
-
-defineExpose({ refreshDelta })
 </script>
 
 <template>

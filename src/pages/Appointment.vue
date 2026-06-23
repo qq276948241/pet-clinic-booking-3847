@@ -3,12 +3,13 @@ import { ref, reactive, computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Calendar, User, Phone, PawPrint, FileText, ChevronDown, CheckCircle } from 'lucide-vue-next'
 import { mockDoctors, getTodayDateString, formatDateDisplay } from '@/data/mock'
-import { addAppointment, generateAppointmentId } from '@/utils/storage'
+import { useAppointment } from '@/composables/useAppointment'
 import { PetTypeLabels, PetTypeEmojis } from '@/types'
 import type { AppointmentForm, PetType, Doctor } from '@/types'
 
 const route = useRoute()
 const router = useRouter()
+const { addAppointment, getDoctorRemainingSlots } = useAppointment()
 
 const today = getTodayDateString()
 const availableDates = computed(() => {
@@ -68,20 +69,13 @@ const selectedDoctor = computed(() =>
   mockDoctors.find((d) => d.id === form.doctorId)
 )
 
-function getDoctorName(doctorId: number | null): string {
-  if (!doctorId) return '请选择医生'
-  const doc = mockDoctors.find((d) => d.id === doctorId)
-  return doc ? `${doc.name} - ${doc.department}` : '请选择医生'
-}
-
 function submitForm() {
   if (!isFormValid.value) return
 
   const doctor = mockDoctors.find((d) => d.id === form.doctorId)
   if (!doctor || !form.petType) return
 
-  const appointment = {
-    id: generateAppointmentId(),
+  addAppointment({
     doctorId: form.doctorId!,
     doctorName: doctor.name,
     date: form.date,
@@ -90,11 +84,8 @@ function submitForm() {
     petName: form.petName.trim(),
     ownerPhone: form.ownerPhone,
     description: form.description.trim(),
-    status: 'pending' as const,
-    createdAt: new Date().toISOString().split('T')[0],
-  }
+  })
 
-  addAppointment(appointment)
   showSuccess.value = true
 
   setTimeout(() => {
@@ -158,7 +149,7 @@ function submitForm() {
                 :key="doc.id"
                 :value="doc.id"
               >
-                {{ doc.name }} - {{ doc.department }}（剩余{{ doc.totalSlots - doc.bookedSlots }}号）
+                {{ doc.name }} - {{ doc.department }}（剩余{{ getDoctorRemainingSlots(doc.id) }}号）
               </option>
             </select>
             <ChevronDown class="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none" />

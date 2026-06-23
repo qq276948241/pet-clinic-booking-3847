@@ -1,46 +1,30 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed } from 'vue'
 import { Calendar, Clock, Phone, X, FileText, AlertCircle, CheckCircle } from 'lucide-vue-next'
 import StatusTag from '@/components/StatusTag.vue'
-import { getAppointments, cancelAppointment as cancelAppointmentInStorage, saveAppointments } from '@/utils/storage'
-import { mockAppointments, formatDateDisplay } from '@/data/mock'
+import { useAppointment } from '@/composables/useAppointment'
+import { formatDateDisplay } from '@/data/mock'
 import { PetTypeLabels, PetTypeEmojis } from '@/types'
 import type { Appointment } from '@/types'
 
-const appointments = ref<Appointment[]>([])
+const { appointments, pendingCount, cancelAppointment } = useAppointment()
 
 const activeTab = ref<'all' | 'pending'>('all')
 
 const filteredAppointments = computed(() => {
   if (activeTab.value === 'pending') {
-    return appointments.value.filter((a) => a.status === 'pending')
+    return pendingCount.value > 0
+      ? appointments.value.filter((a) => a.status === 'pending')
+      : []
   }
   return appointments.value
 })
-
-const pendingCount = computed(() =>
-  appointments.value.filter((a) => a.status === 'pending').length
-)
 
 const showCancelConfirm = ref(false)
 const cancelTarget = ref<Appointment | null>(null)
 
 const showToast = ref(false)
 const toastMessage = ref('')
-
-onMounted(() => {
-  loadAppointments()
-})
-
-function loadAppointments() {
-  const stored = getAppointments()
-  if (stored.length === 0) {
-    appointments.value = [...mockAppointments]
-    saveAppointments(mockAppointments)
-  } else {
-    appointments.value = stored
-  }
-}
 
 function confirmCancel(apt: Appointment) {
   cancelTarget.value = apt
@@ -49,7 +33,7 @@ function confirmCancel(apt: Appointment) {
 
 function handleCancel() {
   if (cancelTarget.value) {
-    const result = cancelAppointmentInStorage(cancelTarget.value.id)
+    const result = cancelAppointment(cancelTarget.value.id)
     if (result) {
       toastMessage.value = `已取消预约，${result.doctorName}的号源已退还`
       showToast.value = true
@@ -57,7 +41,6 @@ function handleCancel() {
         showToast.value = false
       }, 2500)
     }
-    loadAppointments()
   }
   showCancelConfirm.value = false
   cancelTarget.value = null
