@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onActivated, onMounted } from 'vue'
 import { Calendar, Clock, Phone, X, FileText, AlertCircle, CheckCircle } from 'lucide-vue-next'
 import StatusTag from '@/components/StatusTag.vue'
 import { useAppointment } from '@/composables/useAppointment'
@@ -7,18 +7,19 @@ import { formatDateDisplay } from '@/data/mock'
 import { PetTypeLabels, PetTypeEmojis } from '@/types'
 import type { Appointment } from '@/types'
 
-const { appointments, pendingCount, cancelAppointment } = useAppointment()
+const { appointments, pendingCount, cancelAppointment, refresh } = useAppointment()
 
 const activeTab = ref<'all' | 'pending'>('all')
 
 const filteredAppointments = computed(() => {
   if (activeTab.value === 'pending') {
-    return pendingCount.value > 0
-      ? appointments.value.filter((a) => a.status === 'pending')
-      : []
+    return appointments.value.filter((a) => a.status === 'pending')
   }
   return appointments.value
 })
+
+onMounted(refresh)
+onActivated(refresh)
 
 const showCancelConfirm = ref(false)
 const cancelTarget = ref<Appointment | null>(null)
